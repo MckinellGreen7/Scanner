@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef , Suspense, useContext } from 'react';
+import React, { useState, useEffect, useRef , Suspense } from 'react';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { infinity } from 'ldrs'
-import { AuthContext } from '../Auth/AuthContext';
 
 infinity.register()
 
@@ -44,7 +43,6 @@ const Overview = () => {
   const [localDirectoryPath, setLocalDirectoryPath] = useState('');
   const [statsData, setStatsData] = useState(null);
   const [scanData, setScanData] = useState(null);
-  const { username } = useContext(AuthContext);
 
   const generateColors = (count) => {
     const hueStep = 360 / count;
@@ -287,7 +285,7 @@ const Overview = () => {
         },
         body: JSON.stringify({
           projectName,
-          username: username, // Hardcoded username as requested
+          username: 'hardcodeduser', // Hardcoded username as requested
           reportData,
         }),
       });
@@ -313,6 +311,53 @@ const Overview = () => {
       setKeyValuePairs(newKeyValuePairs);
     }
   };
+
+
+  const [aiMessage, setAiMessage] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+
+  const handleAiChat = async () => {
+    setIsLoading(true);
+    try {
+        const response = await fetch('http://localhost:3000/gemini-chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: aiMessage }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to get response from Gemini');
+        }
+
+        const data = await response.json();
+        setAiResponse(data.response);
+
+        // Parse the PII data object from the response
+        const piiData = JSON.parse(data.pii.replace(/```json\n|\n```/g, ''));
+
+        // Convert the PII data object into key-value pairs
+        const updatedKeyValuePairs = Object.entries(piiData).map(([key, value]) => ({ key, value }));
+        
+        for (let i = 0; i < updatedKeyValuePairs.length; i++) {
+          updatedKeyValuePairs[i].value = "\\b" + updatedKeyValuePairs[i].value
+              .replace(/^\^|\$$/g, '')  // Remove ^ and $
+              .replace(/`/g, '')        // Remove backticks
+              + "\\b";
+      }
+      
+        setKeyValuePairs(updatedKeyValuePairs);
+
+    } catch (error) {
+        console.error('Error in AI chat:', error);
+        setAiResponse('Failed to get response from Gemini');
+    } finally {
+        setIsLoading(false);
+    }
+};
+
+   
 
   return (    
     <>
@@ -359,6 +404,21 @@ const Overview = () => {
                     }
                   } }
                   className="bg-[#282828] text-white rounded-2xl py-4 px-4 w-full mb-2 focus:outline-none" />
+              <div className="mt-4">
+                  <input
+                    type="text"
+                    placeholder="Enter the genre of your project"
+                    value={aiMessage}
+                    onChange={(e) => setAiMessage(e.target.value)}
+                    className="bg-[#282828] text-white rounded-2xl py-4 px-4 w-full mb-2 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleAiChat}
+                    className="bg-[#a4ff9e] hover:bg-black hover:text-[#a4ff9e] text-black py-3 px-6 rounded-lg w-64 transition duration-300 font-bold mt-2"
+                  >
+                    Get Suggestions
+                  </button>
+                </div>
                 {keyValuePairs.map((pair, index) => (
                   <div className="flex space-x-2 mb-2" key={index}>
                     <input
@@ -399,6 +459,21 @@ const Overview = () => {
                   value={localDirectoryPath}
                   onChange={(e) => setLocalDirectoryPath(e.target.value)}
                   className="bg-[#282828] text-white rounded-2xl py-4 px-4 w-full mb-2 focus:outline-none" />
+                <div className="mt-4">
+                <input
+                  type="text"
+                  placeholder="Enter the genre of your project"
+                  value={aiMessage}
+                  onChange={(e) => setAiMessage(e.target.value)}
+                  className="bg-[#282828] text-white rounded-2xl py-4 px-4 w-full mb-2 focus:outline-none"
+                />
+                <button
+                  onClick={handleAiChat}
+                  className="bg-[#a4ff9e] hover:bg-black hover:text-[#a4ff9e] text-black py-3 px-6 rounded-lg w-64 transition duration-300 font-bold mt-2"
+                >
+                  Get Suggestions
+                </button>
+              </div>
                 {keyValuePairs.map((pair, index) => (
                   <div className="flex space-x-2 mb-2 mt-4" key={index}>
                     <input
@@ -442,6 +517,18 @@ const Overview = () => {
             </div>
           </div>
         </div>
+
+  {/* AI model Implementation */}
+
+  {aiResponse && (
+    <div className="mt-4 bg-[#282828] text-white rounded-lg p-4">
+      <h3 className="text-lg mb-2">Suggestions:</h3>
+      <p>{aiResponse}</p>
+    </div>
+  )}
+  <br></br>
+
+  {/* over */}
 
         <div className="flex flex-col md:flex-row gap-8 w-[95%] mx-auto" style={{height:'500px'}}>
         <Suspense fallback={<Loading />}>

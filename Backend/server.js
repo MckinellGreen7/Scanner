@@ -1,6 +1,8 @@
 import express from 'express';
 import { scanGitHubRepository } from './scanners/github-scanner.js';
+import { GoogleAuth } from 'google-auth-library';
 import scanDirectory from './scanners/file-scanner.js';
+import { TextServiceClient } from '@google-ai/generativelanguage';
 import scanFiles from './scanners/pii-localScanner.js';
 import { analyzeLocalDirectory, analyzeGitHubRepository } from './utils/language-analyzer.js';
 import { Octokit } from 'octokit';
@@ -332,6 +334,29 @@ app.post("/regexValue", async (req, res) => {
   const response = await autoPopulate(data)
   return res.json(response)
 })
+
+app.post('/gemini-chat', async (req, res) => {
+  const { message } = req.body;
+  const prompt = `Provide the object structure for PII data for ${message}. The output should be in the form of a JSON object where each key represents a type of PII and its value is a regex pattern that matches that PII.`
+  const client = new TextServiceClient({
+    authClient: new GoogleAuth().fromAPIKey(process.env.GEMINI_API_KEY),
+  });
+
+  try {
+    const result = await client.generateText({
+      model: 'models/text-bison-001',
+      prompt: { text: prompt },
+    });
+
+    const response = result[0].candidates[0].output || {}
+
+    return res.json({ pii: response });
+  } catch (error) {
+    console.error('Error calling Gemini API:', error);
+    res.status(500).json({ error: 'Failed to get response from Gemini' });
+  }
+});
+
 
 app.listen(port, () => {
   connectToMongoDB();
